@@ -1,0 +1,2 @@
+# butian_AuxiliarySubmission
+补天自动化辅助提交脚本，具有浏览器扩展与油猴脚本两种使用形式
