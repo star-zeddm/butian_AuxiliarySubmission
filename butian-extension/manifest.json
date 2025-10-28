@@ -1,0 +1,28 @@
+{
+  "name": "补天自动提交助手",
+  "description": "在补天漏洞提交页自动填充表单、匹配备案信息、一键插入漏洞模板。",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png"
+  },
+  "action": {
+    "default_title": "补天助手",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.butian.net/Loo/submit*"],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+  "host_permissions": [
+    "https://101.35.159.147/*"
+  ],
+  "permissions": [
+    "storage"
+  ]
+}
