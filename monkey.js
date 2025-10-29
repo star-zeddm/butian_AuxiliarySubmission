@@ -13,40 +13,93 @@
 
     /* ==========  1. 日志区 + console 劫持（最小侵入） ========== */
     const LOG = (() => {
-        let box, area;
+        let boxLeft, boxRight, area;          // 左、右容器 + 日志区
+        let visible = false;                  // 面板显隐状态
+    
         const init = () => {
-            if (box) return;
-
-            /* 容器 */
-            box = document.createElement('div');
-            box.id = 'beibu_ui';
-            Object.assign(box.style, {
+            if (boxLeft) return;               // 只做一次
+    
+            /* ---------- 左侧容器（原来就有的） ---------- */
+            boxLeft = document.createElement('div');
+            boxLeft.id = 'beibu_ui';
+            Object.assign(boxLeft.style, {
                 position: 'fixed',
-                inset: '8% auto 8% 0',
+                inset: '8% auto 8% 0',        // 贴左边
                 width: '18.5%',
                 background: 'rgba(0,0,0,.55)',
-                display: 'none',               /* 默认隐藏 */
+                display: 'none',
                 flexDirection: 'column',
                 zIndex: 9999
             });
-
-            /* 6 按钮 */
-            const cfg = ['信息补充', '弱口令', 'xss', 'csrf', 'sql注入', '逻辑漏洞'];
-            cfg.forEach((txt, idx) => {
+    
+            /* ---------- 右侧容器（新增） ---------- */
+            boxRight = document.createElement('div');
+            boxRight.id = 'beibu_ui_right';
+            Object.assign(boxRight.style, {
+                position: 'fixed',
+                inset: '8% 0 8% auto',         // 贴右边
+                width: '18.5%',
+                background: 'rgba(0,0,0,.55)',
+                display: 'none',
+                flexDirection: 'column',
+                zIndex: 9999
+            });
+    
+            /* ---------- 共用日志输出区 ---------- */
+            area = document.createElement('div');
+            area.style.cssText = 'flex:1;overflow-y:auto;height:120px;background:rgba(0,0,0,.6);color:#0f0;font:12px/1.4 monospace;padding:4px;white-space:pre-wrap;';
+    
+            /* ---------- 左侧 6 按钮 ---------- */
+            const cfgLeft = ['信息补充', '弱口令', 'xss', 'csrf', 'sql注入', '逻辑漏洞'];
+            cfgLeft.forEach((txt, idx) => {
                 const b = document.createElement('button');
                 b.textContent = txt;
                 b.style.cssText = 'height:36px;margin:0 0 6px 0;width:100%;cursor:pointer;font-size:14px;';
-                b.onclick = () => btnActions[idx]();   /* 绑定对应动作 */
-                box.appendChild(b);
+                b.onclick = () => btnActions[idx]();   // 复用原来的 btnActions
+                boxLeft.appendChild(b);
             });
-
-            /* 日志输出区 */
-            area = document.createElement('div');
-            area.style.cssText = 'flex:1;overflow-y:auto;height:120px;background:rgba(0,0,0,.6);color:#0f0;font:12px/1.4 monospace;padding:4px;white-space:pre-wrap;';
-            box.appendChild(area);
-            document.body.appendChild(box);
+            boxLeft.appendChild(area);                  // 日志区挂在左边
+    
+        /* ---------- 右侧 13 按钮（12 小 + 1 合并） ---------- */
+        const cfgRight = [
+            { txt: 'github BY 北部',     fn: () => github() },
+            { txt: '并发',     fn: () => logical_binfa() },
+            { txt: '越权',      fn: () => logical_yuequan() },
+            { txt: '支付漏洞_手动调危害',    fn: () => logical_zifu() },
+            { txt: '信息泄露',   fn: () => logical_xinxixielou() },
+            { txt: '未授权访问',     fn: () => logical_weishoquan() },
+            { txt: '文件上传',     fn: () => fileupload() },
+            { txt: '命令执行',   fn: () => exe_zx() },
+            { txt: '来个权重目标？_等待开发',     fn: () => aaaa() },
+            { txt: '来个高校目标？_等待开发',     fn: () => aaaa() },
+            { txt: '来个政府目标？_等待开发',     fn: () => aaaa() },
+            { txt: '包吃包住？_等待开发',     fn: () => aaaa() },
+            { txt: '详细填充{爱站截图插入}',     fn: () => img_init() }   // 合并按钮
+        ];
+        
+        const gap   = 4;                 // 单个间距
+        const logH  = 120;               // 日志区高度
+        const small = 1,  big = 2;       // 份数
+        const total = 12 * small + big;  // 12 小 + 1 合并 = 14 份
+        const unit  = `(100% - ${logH}px - ${12 * gap}px) / ${total}`;
+        
+        cfgRight.forEach((item, idx) => {
+            const b = document.createElement('button');
+            b.textContent = item.txt;
+            // 最后一个按钮占 2 份，其余占 1 份
+            const flexGrow = idx === cfgRight.length - 1 ? big : small;
+            b.style.cssText =
+                `flex:${flexGrow};` +               // 关键：真正吃掉多余空间
+                `margin:0 0 ${gap}px 0;width:100%;cursor:pointer;font-size:12px;`;
+            b.onclick = item.fn;
+            boxRight.appendChild(b);
+        });
+            
+            /* ---------- 插到页面 ---------- */
+            document.body.append(boxLeft, boxRight);
         };
-
+    
+        /* ---------- 日志方法（完全不变） ---------- */
         const write = (lv, ...args) => {
             init();
             const line = `${new Date().toLocaleTimeString()} [${lv}] ${args.map(i => typeof i === 'object' ? JSON.stringify(i) : i).join(' ')}`;
@@ -55,15 +108,23 @@
             area.appendChild(div);
             area.scrollTop = area.scrollHeight;
         };
-
-        /* 劫持原生 console */
+    
+        /* ---------- 劫持 console（完全不变） ---------- */
         const lvMap = { log: 'LOG', warn: 'WARN', error: 'ERR' };
         ['log', 'warn', 'error'].forEach(l => {
             const raw = console[l];
             console[l] = (...a) => { write(lvMap[l], ...a); raw.apply(console, a); };
         });
-
-        return { show: () => { init(); box.style.display = 'flex'; } };
+    
+        /* ---------- 对外只暴露 toggle ---------- */
+        return {
+            show: () => {
+                init();
+                visible = !visible;
+                boxLeft.style.display  = visible ? 'flex' : 'none';
+                boxRight.style.display = visible ? 'flex' : 'none';
+            }
+        };
     })();
 
     /* ==========  2. 6 按钮动作占位（后续你随便改） ========== */
@@ -93,6 +154,7 @@
 
     console.log('当前处于补天提交页');
     const BASE = 'https://101.35.159.147'
+    
 
     function ceshi(){
         /* ========== 用户可调参数 ========== */
@@ -489,7 +551,7 @@
 
         // 标题
 
-        weak_title.value = `${ICP_name}/线上业务系统${path}接口存在${weak_name}漏洞`
+        weak_title.value = `${ICP_name}/线上业务系统${path}接口存在${weak_name}`
 
         console.log('漏洞标题已键入')
 
@@ -550,6 +612,174 @@
         weak_input('8',explain,suggest);
 
     }
+    
+    //并发
+    async function logical_binfa(){
+        const explain = '接口存在并发漏洞';
+        const suggest = '增加接口数据格式校验';
+        weak_input('8',explain,suggest);
+    }
+
+    //垂直/水平越权
+    async function logical_yuequan(){
+        const explain = '接口未校验用户身份与资源归属，攻击者越权访问或操作他人数据。';
+        const suggest = '每次请求必须验证用户身份及资源权限，禁止仅依赖前端传值。';
+        weak_input('8',explain,suggest);
+    }
+    
+    // 支付
+    async function logical_zifu(){
+        const explain = '接口未验证用户输入，导致支付漏洞';
+        const suggest = '增加接口数据格式校验';
+        weak_input('8',explain,suggest);
+    }
+    
+    // 信息泄露（调试接口、返回包、日志）
+    async function logical_xinxixielou(){
+        const explain = '接口存在信息泄露';
+        const suggest = '增加接口数据格式及用户权限校验';
+        weak_input('8',explain,suggest);
+    }
+    
+    // 未授权访问（默认开放、鉴权缺失）
+    async function logical_weishoquan(){
+        const explain = '接口存在未授权访问，泄露系统信息';
+        const suggest = '所有接口强制鉴权，默认拒绝，按需开放，并记录调用来源。';
+        weak_input('8',explain,suggest);
+    }
+    
+    // 文件上传（任意后缀、内容校验缺失）
+    async function fileupload(){
+        const explain = '接口存在文件上传漏洞';
+        const suggest = '白名单后缀+文件头+内容三重校验，重命名存储，隔离执行权限。';
+        weak_input('4',explain,suggest);
+    }
+    
+    // 命令/代码执行（拼接、注入、反序列化）
+    async function exe_zx(){
+        const explain = '接口存在命令执行，外部输入参与命令执行，造成远程命令执行。';
+        const suggest = '使用参数化/ORM，禁止拼接，启用WAF，最小权限运行进程。';
+        weak_input('3',explain,suggest);
+    }
+    function github(){
+        window.open('https://github.com/star-zeddm/butian_AuxiliarySubmission')
+    }
+   
+    
+    class img_all{
+      constructor(domain,weak_url){
+        this.domain = domain
+        this.weak_url = weak_url
+      };
+
+      async uploadImage(blob) {
+            const fd = new FormData();
+            fd.append('upfile', blob, 'bing.png');
+            fd.append('type', 'ajax');
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/Public/ueditor/php/controller.php?action=uploadimage');
+            xhr.withCredentials = true;
+
+            return new Promise((resolve, reject) => {
+                xhr.onload = () => {
+                    if (xhr.status !== 200) return reject('上传失败，状态码：' + xhr.status);
+                    const json = JSON.parse(xhr.responseText);
+                    json.state === 'SUCCESS' ? resolve(json.url) : reject(json.state || '上传失败');
+                };
+                xhr.onerror = () => reject('网络错误');
+                xhr.send(fd);
+            });
+      };
+
+      // 获取服务端爱站截图
+      async getShot(domain) {
+          
+            const res = await fetch(`https://101.35.159.147/api/get_img`, {
+
+                method: 'POST',
+                // 1. 改成简单类型
+                headers: { 'Content-Type': 'text/plain' },
+                // 2. body 里还是 JSON 字符串，后端按字符串接收再 JSON.parse 即可
+                body: JSON.stringify({ 'domain': this.domain })
+            });
+
+            return await res.blob()      // 得到 Blob(type='image/png')
+      };
+
+
+      async img(domain){
+            const blob = await this.getShot(domain);
+            console.log('爱站截图获取成功：');
+
+            const url  = await this.uploadImage(blob);
+            console.log('爱站截图已上传至补天：', url);
+            return url
+
+      };
+
+      async addImg(url,loop_img,path) {
+
+        const iframe = document.getElementById('ueditor_0');
+        if (!iframe) return;
+        const idoc = iframe.contentDocument || iframe.contentWindow.document;
+        const ibody = idoc && idoc.body;
+        if (!ibody) return;
+
+        // 清空旧 p
+        ibody.querySelectorAll('p').forEach(p => p.remove());
+
+        // 插入新内容
+        const imgP = idoc.createElement('p');
+        imgP.innerHTML = `<img src="${url}">`;
+
+        const weakP = idoc.createElement('p');
+        weakP.textContent = `漏洞url:${path}`
+
+        const lineP = idoc.createElement('p');
+        lineP.textContent = '-----';
+
+        ibody.append(imgP, weakP, lineP);
+
+        // 通知编辑器更新
+        const ue = UE.instants['ueditorInstant0'];
+        if (ue) ue.setContent(ue.getContent());
+
+        clearInterval(loop_img);
+        console.log('图片插入定时器已销毁')
+      };
+
+
+      async main(){
+        console.log('漏洞详细开始填充')
+        const butian_url = await this.img(this.domain)
+
+        console.log('已获取图片url:',butian_url);
+
+        if (butian_url){
+             const loop_img = setInterval(() => this.addImg(butian_url, loop_img,this.weak_url),300);
+        }
+        console.log('图片填充已结束');
+
+
+      };
+
+
+
+    };
+    
+    async function img_init(){
+        var input_domain = document.querySelector('input[placeholder="输入所属域名或ip"]');
+        input_domain = input_domain.value;
+        console.log('已获取域名:',input_domain)
+    
+        var path = document.querySelector('input[placeholder="URL格式：以http://或https://开头"]');
+        path = path.value;
+        let new_input = new img_all(input_domain,path);
+        new_input.main()
+        
+        
+    };
 
 
 
